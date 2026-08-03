@@ -699,7 +699,7 @@ function Dashboard({data,actions}){
           h('span',{className:'w-2 h-2 rounded-full flex-shrink-0',style:{background:m.color}}),
           h('span',{className:'flex-1 font-medium'},t.title),
           h('span',{className:'font-mono text-xs',style:{color:'#8B8576'}},(t.sourceLibrary||'-')+' → '+(t.pickupLibrary||'-')),
-          h(Badge,{color:STATUS_COLOR.wait},t.status||'대기중')
+          h(Badge,{color:STATUS_COLOR.overdue},t.dueDate?('찾아갈 기한 '+fmtDate(t.dueDate)):'대출대기중')
         );
       }))
     ):null,
