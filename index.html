@@ -1115,8 +1115,8 @@ function App(){
         if(!t) return;
         var libs = ensureLibraryList(data.libraries,t.pickupLibrary||t.sourceLibrary||'');
         var loans = data.loans.concat([{ id:uid('loan'),title:t.title,author:'',library:t.pickupLibrary||t.sourceLibrary||'',room:'',
-          regno:t.regno||'',memberId:t.memberId,borrowDate:t.arrivalDate||todayStr(),
-          dueDate:t.dueDate||addDaysStr(todayStr(),14),returnDate:'',tag:'책나르샤',category:inferCategory('') }]);
+          regno:t.regno||'',memberId:t.memberId,borrowDate:todayStr(),
+          dueDate:addDaysStr(todayStr(),14),returnDate:'',tag:'책나르샤',category:inferCategory('') }]);
         var transfers = data.transfers.filter(function(x){return x.id!==id;});
         commit(Object.assign({},data,{libraries:libs,loans:loans,transfers:transfers}));
         showToast('대출로 전환했어요.');
@@ -1191,8 +1191,9 @@ function App(){
               loans[loanIdx]=Object.assign({},loans[loanIdx],{dueDate:r.dueDate||loans[loanIdx].dueDate,tag:'책나르샤'});
               updated++;
             }else{
+              var autoBorrowDate = r.arrivalDate||todayStr();
               loans.push({id:uid('loan'),title:r.title,author:'',library:r.pickupLibrary,room:'',regno:r.regno,
-                memberId:memberId,borrowDate:r.arrivalDate||todayStr(),dueDate:r.dueDate||addDaysStr(todayStr(),14),
+                memberId:memberId,borrowDate:autoBorrowDate,dueDate:addDaysStr(autoBorrowDate,14),
                 returnDate:'',tag:'책나르샤',category:inferCategory('')});
               convertedToLoan++;
             }
