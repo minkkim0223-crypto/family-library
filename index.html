@@ -656,7 +656,8 @@ function Dashboard({data,actions}){
   var soon = activeLoans.filter(function(l){return loanStatus(l)==='soon';});
   var overdue = activeLoans.filter(function(l){return loanStatus(l)==='overdue';});
   var waitingRes = reservations.filter(function(r){return r.status==='대기중';});
-  var viaTransfer = activeLoans.filter(function(l){return l.tag==='책나르샤';});
+  var readyRes = reservations.filter(function(r){return r.status==='도착';}).slice()
+    .sort(function(a,b){return (a.pickupDeadline||'').localeCompare(b.pickupDeadline||'');});
   var pendingTransfers = transfers.filter(function(t){return t.status==='대출대기중';});
   var urgent = activeLoans.filter(function(l){return diffDays(l.dueDate)<=3;});
   if(memberFilter) urgent = urgent.filter(function(l){return l.memberId===memberFilter;});
@@ -671,7 +672,7 @@ function Dashboard({data,actions}){
       h(StatCard,{num:soon.length,label:'반납임박',warn:soon.length>0}),
       h(StatCard,{num:overdue.length,label:'연체',warn:overdue.length>0}),
       h(StatCard,{num:waitingRes.length,label:'예약대기'}),
-      h(StatCard,{num:pendingTransfers.length,label:'책나르샤 배송중'})
+      h(StatCard,{num:pendingTransfers.length,label:'책나르샤 대출 대기'})
     ),
     h('div',{className:'flex gap-2 flex-wrap mb-4'},
       h(Chip,{active:memberFilter==='',onClick:function(){setMemberFilter('');},color:'#8B8576'},'전체'),
@@ -691,7 +692,7 @@ function Dashboard({data,actions}){
         );
       })),
     pendingTransfers.length>0?h('div',null,
-      h('div',{className:'font-serif text-lg font-bold mb-3.5 mt-6'},'책나르샤 배송중'),
+      h('div',{className:'font-serif text-lg font-bold mb-3.5 mt-6'},'책나르샤 대출 대기'),
       h('div',{className:'flex flex-col gap-2'},pendingTransfers.map(function(t){
         var m=getMember(members,t.memberId);
         return h('div',{key:t.id,className:'flex items-center gap-2.5 bg-white border rounded-lg px-3 py-2 text-sm',style:{borderColor:'#DAD2BC'}},
@@ -702,15 +703,15 @@ function Dashboard({data,actions}){
         );
       }))
     ):null,
-    viaTransfer.length>0?h('div',null,
-      h('div',{className:'font-serif text-lg font-bold mb-3.5 mt-6'},'책나르샤로 받은 책'),
-      h('div',{className:'flex flex-col gap-2'},viaTransfer.map(function(l){
-        var m=getMember(members,l.memberId);
-        return h('div',{key:l.id,className:'flex items-center gap-2.5 bg-white border rounded-lg px-3 py-2 text-sm',style:{borderColor:'#DAD2BC'}},
+    readyRes.length>0?h('div',null,
+      h('div',{className:'font-serif text-lg font-bold mb-3.5 mt-6'},'예약도서 대출 대기'),
+      h('div',{className:'flex flex-col gap-2'},readyRes.map(function(r){
+        var m=getMember(members,r.memberId);
+        return h('div',{key:r.id,className:'flex items-center gap-2.5 bg-white border rounded-lg px-3 py-2 text-sm',style:{borderColor:'#DAD2BC'}},
           h('span',{className:'w-2 h-2 rounded-full flex-shrink-0',style:{background:m.color}}),
-          h('span',{className:'flex-1 font-medium'},l.title),
-          h('span',{className:'font-mono text-xs',style:{color:'#8B8576'}},l.library),
-          h(Badge,{color:STATUS_COLOR.wait},'반납예정 '+fmtDate(l.dueDate))
+          h('span',{className:'flex-1 font-medium'},r.title),
+          h('span',{className:'font-mono text-xs',style:{color:'#8B8576'}},r.library),
+          h(Badge,{color:STATUS_COLOR.overdue},r.pickupDeadline?('찾아갈 기한 '+fmtDate(r.pickupDeadline)):'도착')
         );
       }))
     ):null,
@@ -1145,8 +1146,17 @@ function App(){
         var libs = data.libraries.slice();
         var loans = data.loans.slice();
         var transfers = data.transfers.slice();
-        var added=0, updated=0, convertedToLoan=0;
+        var IGNORE_STATUSES = ['완료','복귀대상자료(대출불가)'];
+        var added=0, updated=0, convertedToLoan=0, ignored=0;
         records.forEach(function(r){
+          if(IGNORE_STATUSES.indexOf(r.status)>=0){
+            // already resolved (returned) or not borrowable — not useful to track here.
+            // if we were already tracking it, drop it; otherwise just skip.
+            var before = transfers.length;
+            transfers = transfers.filter(function(x){return !(x.regno===r.regno && x.memberId===memberId);});
+            if(transfers.length!==before) ignored++;
+            return;
+          }
           if(r.pickupLibrary) libs = ensureLibraryList(libs,r.pickupLibrary);
           if(r.sourceLibrary) libs = ensureLibraryList(libs,r.sourceLibrary);
           var loanIdx = loans.findIndex(function(l){return l.regno===r.regno && l.memberId===memberId && !l.returnDate;});
@@ -1179,6 +1189,7 @@ function App(){
         var msg = added+'건을 가져왔어요';
         if(convertedToLoan>0) msg += ', 이미 대출된 '+convertedToLoan+'건은 대출관리로 옮겼어요';
         if(updated>0) msg += ', '+updated+'건은 정보를 갱신했어요';
+        if(ignored>0) msg += ', 종료된 '+ignored+'건은 목록에서 정리했어요';
         showToast(msg+'.');
       },
       addMember: function(){
