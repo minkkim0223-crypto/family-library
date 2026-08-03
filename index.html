@@ -355,7 +355,7 @@ function SelectInput(props){
 var h = React.createElement;
 
 /* ================= record cards ================= */
-function LoanCard({loan,member,onExtend,onReturn,onEdit,onDelete,onToggleCategory}){
+function LoanCard({loan,member,onExtend,onReturn,onEdit,onDelete,onToggleCategory,simpleDate}){
   var st = loanStatus(loan);
   var color = STATUS_COLOR[st];
   var cat = loan.category || 'adult';
@@ -373,12 +373,17 @@ function LoanCard({loan,member,onExtend,onReturn,onEdit,onDelete,onToggleCategor
       ),
       h(Stamp,{color:color,small:true},loanStampText(loan))
     ),
-    h('div',{className:'font-mono text-xs flex flex-wrap gap-3.5 mb-2.5',style:{color:'#26241D'}},
-      h('span',null,h('span',{className:'font-sans text-[11px] mr-1',style:{color:'#8B8576'}},'대출'),fmtDate(loan.borrowDate)),
-      h('span',null,h('span',{className:'font-sans text-[11px] mr-1',style:{color:'#8B8576'}},'반납예정'),fmtDate(loan.dueDate)),
-      loan.returnDate?h('span',null,h('span',{className:'font-sans text-[11px] mr-1',style:{color:'#8B8576'}},'반납일'),fmtDate(loan.returnDate)):null,
-      loan.regno?h('span',{style:{color:'#8B8576'}},h('span',{className:'font-sans text-[11px] mr-1'},'등록번호'),loan.regno):null
-    ),
+    simpleDate?
+      h('div',{className:'font-mono text-xs flex flex-wrap gap-3.5 mb-2.5',style:{color:'#26241D'}},
+        h('span',null,h('span',{className:'font-sans text-[11px] mr-1',style:{color:'#8B8576'}},'반납완료일'),fmtDate(loan.returnDate)),
+        loan.regno?h('span',{style:{color:'#8B8576'}},h('span',{className:'font-sans text-[11px] mr-1'},'등록번호'),loan.regno):null
+      ):
+      h('div',{className:'font-mono text-xs flex flex-wrap gap-3.5 mb-2.5',style:{color:'#26241D'}},
+        h('span',null,h('span',{className:'font-sans text-[11px] mr-1',style:{color:'#8B8576'}},'대출'),fmtDate(loan.borrowDate)),
+        h('span',null,h('span',{className:'font-sans text-[11px] mr-1',style:{color:'#8B8576'}},'반납예정'),fmtDate(loan.dueDate)),
+        loan.returnDate?h('span',null,h('span',{className:'font-sans text-[11px] mr-1',style:{color:'#8B8576'}},'반납일'),fmtDate(loan.returnDate)):null,
+        loan.regno?h('span',{style:{color:'#8B8576'}},h('span',{className:'font-sans text-[11px] mr-1'},'등록번호'),loan.regno):null
+      ),
     h('div',{className:'flex gap-1.5 flex-wrap justify-end'},
       !loan.returnDate?h(Btn,{small:true,variant:'brass',onClick:function(){onExtend(loan.id);}},'대출연장 (+7일)'):null,
       !loan.returnDate?h(Btn,{small:true,onClick:function(){onReturn(loan.id);}},'반납완료 처리'):null,
@@ -662,7 +667,12 @@ function Dashboard({data,actions}){
     .sort(function(a,b){return (a.pickupDeadline||'').localeCompare(b.pickupDeadline||'');});
   var pendingTransfers = transfers.filter(function(t){return t.status==='대출대기중';});
   var urgent = activeLoans.filter(function(l){return diffDays(l.dueDate)<=3;});
-  if(memberFilter) urgent = urgent.filter(function(l){return l.memberId===memberFilter;});
+  var pendingTransfersShown = pendingTransfers, readyResShown = readyRes;
+  if(memberFilter){
+    urgent = urgent.filter(function(l){return l.memberId===memberFilter;});
+    pendingTransfersShown = pendingTransfers.filter(function(t){return t.memberId===memberFilter;});
+    readyResShown = readyRes.filter(function(r){return r.memberId===memberFilter;});
+  }
   urgent = urgent.slice().sort(function(a,b){return diffDays(a.dueDate)-diffDays(b.dueDate);});
   var monthKey = todayStr().slice(0,7);
   var counts = {}; members.forEach(function(m){counts[m.id]=0;});
@@ -693,9 +703,9 @@ function Dashboard({data,actions}){
           h(Btn,{small:true,onClick:function(){actions.markReturned(l.id);}},'반납완료')
         );
       })),
-    pendingTransfers.length>0?h('div',null,
+    pendingTransfersShown.length>0?h('div',null,
       h('div',{className:'font-serif text-lg font-bold mb-3.5 mt-6'},'책나르샤 대출 대기'),
-      h('div',{className:'flex flex-col gap-2'},pendingTransfers.map(function(t){
+      h('div',{className:'flex flex-col gap-2'},pendingTransfersShown.map(function(t){
         var m=getMember(members,t.memberId);
         return h('div',{key:t.id,className:'flex items-center gap-2.5 bg-white border rounded-lg px-3 py-2 text-sm',style:{borderColor:'#DAD2BC'}},
           h('span',{className:'w-2 h-2 rounded-full flex-shrink-0',style:{background:m.color}}),
@@ -705,9 +715,9 @@ function Dashboard({data,actions}){
         );
       }))
     ):null,
-    readyRes.length>0?h('div',null,
+    readyResShown.length>0?h('div',null,
       h('div',{className:'font-serif text-lg font-bold mb-3.5 mt-6'},'예약도서 대출 대기'),
-      h('div',{className:'flex flex-col gap-2'},readyRes.map(function(r){
+      h('div',{className:'flex flex-col gap-2'},readyResShown.map(function(r){
         var m=getMember(members,r.memberId);
         return h('div',{key:r.id,className:'flex items-center gap-2.5 bg-white border rounded-lg px-3 py-2 text-sm',style:{borderColor:'#DAD2BC'}},
           h('span',{className:'w-2 h-2 rounded-full flex-shrink-0',style:{background:m.color}}),
@@ -781,19 +791,21 @@ function LoansTab({data,actions,openModal}){
 /* ================= History tab ================= */
 function HistoryTab({data,actions,openModal}){
   var [catFilter,setCatFilter]=useState('');
-  var members=data.members, loans=data.loans;
-  var returned = loans.filter(function(l){return l.returnDate;});
-  var kidsCount = loans.filter(function(l){return (l.category||'adult')==='kids';}).length;
-  var adultCount = loans.length-kidsCount;
-  var list = loans.slice();
+  var members=data.members;
+  var returned = data.loans.filter(function(l){return l.returnDate;});
+  var kidsCount = returned.filter(function(l){return (l.category||'adult')==='kids';}).length;
+  var adultCount = returned.length-kidsCount;
+  var monthKey = todayStr().slice(0,7);
+  var thisMonth = returned.filter(function(l){return l.returnDate.slice(0,7)===monthKey;}).length;
+  var list = returned.slice();
   if(catFilter) list = list.filter(function(l){return (l.category||'adult')===catFilter;});
-  list.sort(function(a,b){return (b.borrowDate||'').localeCompare(a.borrowDate||'');});
+  list.sort(function(a,b){return (b.returnDate||'').localeCompare(a.returnDate||'');});
   return h('div',null,
     h('div',{className:'font-serif text-lg font-bold mb-1'},'이력'),
-    h('p',{className:'text-xs mb-4',style:{color:'#8B8576'}},'가족구성원과 상관없이, 읽은 책을 비아책/민경책으로 나눠서 볼 수 있어요. 자료실 정보로 자동 분류되고, 배지를 눌러 언제든 바꿀 수 있어요.'),
+    h('p',{className:'text-xs mb-4',style:{color:'#8B8576'}},'반납까지 끝난 책만 모아서 봐요. 가족구성원과 상관없이 비아책/민경책으로 나눠서 볼 수 있어요.'),
     h('div',{className:'grid grid-cols-4 gap-2.5 mb-5'},
-      h(StatCard,{num:loans.length,label:'전체 기록'}),
-      h(StatCard,{num:returned.length,label:'반납완료'}),
+      h(StatCard,{num:returned.length,label:'총 읽은 책'}),
+      h(StatCard,{num:thisMonth,label:'이번 달'}),
       h(StatCard,{num:kidsCount,label:'비아책'}),
       h(StatCard,{num:adultCount,label:'민경책'})
     ),
@@ -802,9 +814,9 @@ function HistoryTab({data,actions,openModal}){
       h(Chip,{active:catFilter==='kids',onClick:function(){setCatFilter('kids');},color:STATUS_COLOR.soon},'비아책'),
       h(Chip,{active:catFilter==='adult',onClick:function(){setCatFilter('adult');},color:STATUS_COLOR.wait},'민경책')
     ),
-    list.length===0?h(EmptyState,{title:'표시할 기록이 없어요.',sub:'대출을 등록하거나 사이트에서 붙여넣어 보세요.'}):
+    list.length===0?h(EmptyState,{title:'아직 반납완료된 기록이 없어요.',sub:'대출관리에서 반납완료 처리하면 여기에 모여요.'}):
       list.map(function(l){
-        return h(LoanCard,{key:l.id,loan:l,member:getMember(members,l.memberId),
+        return h(LoanCard,{key:l.id,loan:l,member:getMember(members,l.memberId),simpleDate:true,
           onExtend:actions.extendLoan,onReturn:actions.markReturned,
           onEdit:function(id){openModal({type:'loan',id:id});},
           onDelete:actions.confirmDeleteLoan,onToggleCategory:actions.toggleCategory});
@@ -814,8 +826,10 @@ function HistoryTab({data,actions,openModal}){
 
 /* ================= Reservations tab ================= */
 function ReservationsTab({data,actions,openModal}){
+  var [memberFilter,setMemberFilter]=useState('');
   var members=data.members;
   var list = data.reservations.slice().sort(function(a,b){return b.reserveDate.localeCompare(a.reserveDate);});
+  if(memberFilter) list = list.filter(function(r){return r.memberId===memberFilter;});
   return h('div',null,
     h('div',{className:'flex justify-between items-center mb-4 flex-wrap gap-2'},
       h('div',{className:'font-serif text-lg font-bold'},'예약도서'),
@@ -823,6 +837,10 @@ function ReservationsTab({data,actions,openModal}){
         h(Btn,{onClick:function(){openModal({type:'import-reservation'});}},'사이트에서 붙여넣기'),
         h(Btn,{variant:'primary',onClick:function(){openModal({type:'reservation'});}},'+ 새 예약 등록')
       )
+    ),
+    h('div',{className:'flex gap-2 flex-wrap mb-4'},
+      h(Chip,{active:memberFilter==='',onClick:function(){setMemberFilter('');},color:'#8B8576'},'전체'),
+      members.map(function(m){return h(Chip,{key:m.id,active:memberFilter===m.id,onClick:function(){setMemberFilter(m.id);},color:m.color},m.name);})
     ),
     list.length===0?h(EmptyState,{title:'등록된 예약이 없어요.',sub:'예약한 책을 등록하고 도착 여부를 챙겨보세요.'}):
       list.map(function(r){
@@ -836,8 +854,10 @@ function ReservationsTab({data,actions,openModal}){
 
 /* ================= Transfers tab ================= */
 function TransfersTab({data,actions,openModal}){
+  var [memberFilter,setMemberFilter]=useState('');
   var members=data.members;
   var list = data.transfers.slice().sort(function(a,b){return (b.requestDate||'').localeCompare(a.requestDate||'');});
+  if(memberFilter) list = list.filter(function(t){return t.memberId===memberFilter;});
   return h('div',null,
     h('div',{className:'flex justify-between items-center mb-1 flex-wrap gap-2'},
       h('div',{className:'font-serif text-lg font-bold'},'책나르샤'),
@@ -847,6 +867,10 @@ function TransfersTab({data,actions,openModal}){
       )
     ),
     h('p',{className:'text-xs mb-4',style:{color:'#8B8576'}},'다른 도서관 책을 가까운 도서관에서 받아보는 상호대차 배송 현황이에요. 이미 대출로 넘어간 책은 대출관리 탭에도 함께 표시돼요.'),
+    h('div',{className:'flex gap-2 flex-wrap mb-4'},
+      h(Chip,{active:memberFilter==='',onClick:function(){setMemberFilter('');},color:'#8B8576'},'전체'),
+      members.map(function(m){return h(Chip,{key:m.id,active:memberFilter===m.id,onClick:function(){setMemberFilter(m.id);},color:m.color},m.name);})
+    ),
     list.length===0?h(EmptyState,{title:'등록된 책나르샤 항목이 없어요.',sub:'나르샤 페이지 표를 붙여넣어 보세요.'}):
       list.map(function(t){
         return h(TransferCard,{key:t.id,t:t,member:getMember(members,t.memberId),
@@ -1334,6 +1358,7 @@ function App(){
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+
 </script>
 </body>
 </html>
