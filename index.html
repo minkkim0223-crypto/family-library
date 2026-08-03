@@ -745,7 +745,7 @@ function LoansTab({data,actions,openModal}){
   var [statusFilter,setStatusFilter]=useState('');
   var [sort,setSort]=useState('due');
   var members=data.members, loans=data.loans;
-  var list = loans.slice();
+  var list = loans.filter(function(l){return !l.returnDate;});
   if(memberFilter) list = list.filter(function(l){return l.memberId===memberFilter;});
   if(statusFilter) list = list.filter(function(l){return loanStatus(l)===statusFilter;});
   if(sort==='due'){
@@ -765,6 +765,7 @@ function LoansTab({data,actions,openModal}){
         h(Btn,{variant:'primary',onClick:function(){openModal({type:'loan'});}},'+ 새 대출 등록')
       )
     ),
+    h('p',{className:'text-xs mb-4',style:{color:'#8B8576'}},'반납완료된 책은 이력 탭으로 옮겨져요.'),
     h('div',{className:'flex gap-2 flex-wrap mb-4'},
       h(Chip,{active:memberFilter==='',onClick:function(){setMemberFilter('');},color:'#8B8576'},'전체'),
       members.map(function(m){return h(Chip,{key:m.id,active:memberFilter===m.id,onClick:function(){setMemberFilter(m.id);},color:m.color},m.name);})
@@ -772,13 +773,13 @@ function LoansTab({data,actions,openModal}){
     h('div',{className:'flex gap-2 mb-4 flex-wrap'},
       h(SelectInput,{value:statusFilter,onChange:function(e){setStatusFilter(e.target.value);},className:'w-auto px-2.5 py-1.5 border rounded-lg text-sm bg-white'},
         h('option',{value:''},'전체 상태'),h('option',{value:'active'},'대출중'),h('option',{value:'soon'},'반납임박'),
-        h('option',{value:'overdue'},'연체'),h('option',{value:'returned'},'반납완료')
+        h('option',{value:'overdue'},'연체')
       ),
       h(SelectInput,{value:sort,onChange:function(e){setSort(e.target.value);},className:'w-auto px-2.5 py-1.5 border rounded-lg text-sm bg-white'},
         h('option',{value:'due'},'반납예정일순'),h('option',{value:'recent'},'최근 대출순')
       )
     ),
-    list.length===0?h(EmptyState,{title:'아직 등록된 대출이 없어요.',sub:'첫 번째 책을 등록해보세요.'}):
+    list.length===0?h(EmptyState,{title:'대출 중인 책이 없어요.',sub:'새 대출을 등록하거나 사이트에서 붙여넣어 보세요.'}):
       list.map(function(l){
         return h(LoanCard,{key:l.id,loan:l,member:getMember(members,l.memberId),
           onExtend:actions.extendLoan,onReturn:actions.markReturned,
